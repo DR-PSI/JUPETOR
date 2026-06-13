@@ -215,9 +215,16 @@ html,body{width:100%;height:100%;background:var(--dk);color:var(--c);font-family
   <div id="rp">
     <div class="ps">
       <div class="pt">// VOICE ENGINE</div>
-      <div class="ms">ENGINE <span>ResponsiveVoice</span></div>
-      <div class="ms">VOICE <span>Thai Female</span></div>
+      <div class="ms">ENGINE <span>Web Speech</span></div>
       <div class="ms">LANG <span>TH + EN</span></div>
+      <div class="ms" style="flex-direction:column;gap:4px;">
+        <span style="opacity:.5;font-size:9px;">SELECT VOICE</span>
+        <select id="vsel" onchange="changeVoice(this.value)"
+          style="background:rgba(0,20,40,.9);border:1px solid var(--br);color:var(--c);
+          font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px;width:100%;border-radius:2px;cursor:pointer;">
+          <option value="">— loading voices... —</option>
+        </select>
+      </div>
     </div>
     <div class="ps">
       <div class="pt">// QUICK</div>
@@ -414,13 +421,43 @@ function loadVoice(){
   if(!window.speechSynthesis)return;
   const vs=speechSynthesis.getVoices();
   if(!vs.length)return;
-  // Priority: Thai > English female > any
-  ttsVoice = vs.find(v=>/th/i.test(v.lang)&&/google/i.test(v.name))
+
+  // Populate dropdown
+  const sel=document.getElementById('vsel');
+  if(sel){
+    sel.innerHTML='';
+    vs.forEach((v,i)=>{
+      const o=document.createElement('option');
+      o.value=i; o.textContent=v.name+' ('+v.lang+')';
+      sel.appendChild(o);
+    });
+  }
+
+  // Priority: female voices
+  ttsVoice =
+    vs.find(v=>/th/i.test(v.lang)&&/female|woman/i.test(v.name))
+    || vs.find(v=>/th/i.test(v.lang)&&/google/i.test(v.name))
     || vs.find(v=>/th/i.test(v.lang))
-    || vs.find(v=>/en/i.test(v.lang)&&/female|samantha|zira|karen|victoria|moira/i.test(v.name))
-    || vs.find(v=>/en-US/i.test(v.lang))
+    || vs.find(v=>v.name==='Microsoft Zira - English (United States)')
+    || vs.find(v=>v.name==='Samantha')
+    || vs.find(v=>v.name==='Karen')
+    || vs.find(v=>v.name==='Moira')
+    || vs.find(v=>v.name==='Victoria')
+    || vs.find(v=>/en/i.test(v.lang)&&/zira|samantha|karen|victoria|moira|fiona|hazel/i.test(v.name))
+    || vs.find(v=>/en-GB/i.test(v.lang))
     || vs[0];
+
+  // Set dropdown to selected voice
+  if(sel && ttsVoice){
+    const idx=vs.indexOf(ttsVoice);
+    if(idx>=0)sel.value=idx;
+  }
   log('Voice: '+(ttsVoice?ttsVoice.name:'default'));
+}
+
+function changeVoice(idx){
+  const vs=speechSynthesis.getVoices();
+  if(vs[idx]){ttsVoice=vs[idx];log('Voice changed: '+vs[idx].name);}
 }
 if(window.speechSynthesis){
   speechSynthesis.onvoiceschanged=loadVoice;
