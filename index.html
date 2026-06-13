@@ -407,20 +407,55 @@ rszvb();window.addEventListener('resize',rszvb);
   })();
 })();
 
-// ══ TTS (ResponsiveVoice) ══
+// ══ TTS UNLOCK + SPEAK ══
+let audioUnlocked=false;
+function unlockAudio(){
+  if(audioUnlocked)return;
+  audioUnlocked=true;
+  // Unlock Web Speech
+  if(window.speechSynthesis){
+    const u=new SpeechSynthesisUtterance('');u.volume=0;
+    window.speechSynthesis.speak(u);
+  }
+  // Unlock ResponsiveVoice
+  if(window.responsiveVoice){
+    responsiveVoice.speak(' ','Thai Female',{volume:0,onend:()=>{}});
+  }
+  log('Audio unlocked ✓');
+}
+
 function speak(text){
   if(!text)return;
   stopSpeak();
   const clean=text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'').replace(/<br>/g,' ').trim();
-  if(window.responsiveVoice){
+
+  // Try ResponsiveVoice first
+  if(window.responsiveVoice && responsiveVoice.voiceSupport()){
     isSpeaking=true;setUI('sp');
     responsiveVoice.speak(clean,'Thai Female',{
-      rate:.9,pitch:1.1,volume:1,
-      onstart:()=>{isSpeaking=true;setUI('sp');log('🔊 Speaking...');},
+      rate:.88,pitch:1.1,volume:1,
+      onstart:()=>{isSpeaking=true;setUI('sp');log('🔊 RV speaking...');},
       onend:()=>onSpkEnd(),
-      onerror:()=>onSpkEnd()
+      onerror:()=>{log('RV err, trying fallback');speakFallback(clean);}
     });
+  } else {
+    speakFallback(clean);
   }
+}
+
+function speakFallback(clean){
+  // Web Speech API fallback
+  if(!window.speechSynthesis){onSpkEnd();return;}
+  const voices=window.speechSynthesis.getVoices();
+  const utt=new SpeechSynthesisUtterance(clean);
+  const thVoice=voices.find(v=>/th/i.test(v.lang))||voices.find(v=>/en/i.test(v.lang)&&/female|samantha|zira|karen/i.test(v.name))||voices[0];
+  if(thVoice)utt.voice=thVoice;
+  utt.lang='th-TH';utt.rate=.88;utt.pitch=1.1;utt.volume=1;
+  utt.onstart=()=>{isSpeaking=true;setUI('sp');log('🔊 WS speaking...');};
+  utt.onend=()=>onSpkEnd();
+  utt.onerror=()=>onSpkEnd();
+  isSpeaking=true;setUI('sp');
+  window.speechSynthesis.speak(utt);
 }
 function onSpkEnd(){
   isSpeaking=false;setUI('sb2');
@@ -475,6 +510,7 @@ function hideLtr(){document.getElementById('ltr').style.display='none';}
 // ══ VOICE TOGGLE ══
 function toggleVoice(){voiceOn?stopVoice():startVoice();}
 function startVoice(){
+  unlockAudio();
   voiceOn=true;
   document.getElementById('vtb').className='von';
   document.getElementById('vi').textContent='⏹';
@@ -600,8 +636,14 @@ setTimeout(()=>{
   log('JUPETOR ready');
 },800);
 document.addEventListener('touchstart',function g(){
-  setTimeout(()=>speak(GREET),300);
+  unlockAudio();
+  setTimeout(()=>speak(GREET),500);
   document.removeEventListener('touchstart',g);
+},{once:true,capture:true});
+// Desktop: unlock on first click anywhere
+document.addEventListener('click',function g(){
+  unlockAudio();
+  document.removeEventListener('click',g);
 },{once:true,capture:true});
 </script>
 </body>
