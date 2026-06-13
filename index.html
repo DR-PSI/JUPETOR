@@ -258,7 +258,6 @@ html,body{width:100%;height:100%;background:var(--dk);color:var(--c);font-family
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://code.responsivevoice.org/responsivevoice.js?key=FREE"></script>
 <script>
 // ══ STATE ══
 let API_KEY='', history=[], isThinking=false, isListening=false, isSpeaking=false;
@@ -407,63 +406,87 @@ rszvb();window.addEventListener('resize',rszvb);
   })();
 })();
 
-// ══ TTS UNLOCK + SPEAK ══
+// ══ TTS — Pure Web Speech API ══
 let audioUnlocked=false;
+let ttsVoice=null;
+
+function loadVoice(){
+  if(!window.speechSynthesis)return;
+  const vs=speechSynthesis.getVoices();
+  if(!vs.length)return;
+  // Priority: Thai > English female > any
+  ttsVoice = vs.find(v=>/th/i.test(v.lang)&&/google/i.test(v.name))
+    || vs.find(v=>/th/i.test(v.lang))
+    || vs.find(v=>/en/i.test(v.lang)&&/female|samantha|zira|karen|victoria|moira/i.test(v.name))
+    || vs.find(v=>/en-US/i.test(v.lang))
+    || vs[0];
+  log('Voice: '+(ttsVoice?ttsVoice.name:'default'));
+}
+if(window.speechSynthesis){
+  speechSynthesis.onvoiceschanged=loadVoice;
+  loadVoice();
+  // Poll fallback for browsers that don't fire onvoiceschanged
+  let vp=setInterval(()=>{if(speechSynthesis.getVoices().length){loadVoice();clearInterval(vp);}},200);
+  setTimeout(()=>clearInterval(vp),5000);
+}
+
 function unlockAudio(){
-  if(audioUnlocked)return;
+  if(audioUnlocked||!window.speechSynthesis)return;
   audioUnlocked=true;
-  // Unlock Web Speech
-  if(window.speechSynthesis){
-    const u=new SpeechSynthesisUtterance('');u.volume=0;
-    window.speechSynthesis.speak(u);
-  }
-  // Unlock ResponsiveVoice
-  if(window.responsiveVoice){
-    responsiveVoice.speak(' ','Thai Female',{volume:0,onend:()=>{}});
-  }
+  const u=new SpeechSynthesisUtterance('');u.volume=0;
+  speechSynthesis.speak(u);
   log('Audio unlocked ✓');
 }
 
 function speak(text){
-  if(!text)return;
+  if(!text||!window.speechSynthesis)return;
   stopSpeak();
-  const clean=text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'').replace(/<br>/g,' ').trim();
-
-  // Try ResponsiveVoice first
-  if(window.responsiveVoice && responsiveVoice.voiceSupport()){
-    isSpeaking=true;setUI('sp');
-    responsiveVoice.speak(clean,'Thai Female',{
-      rate:.88,pitch:1.1,volume:1,
-      onstart:()=>{isSpeaking=true;setUI('sp');log('🔊 RV speaking...');},
-      onend:()=>onSpkEnd(),
-      onerror:()=>{log('RV err, trying fallback');speakFallback(clean);}
-    });
-  } else {
-    speakFallback(clean);
-  }
+  const clean=text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'').replace(/<br>/g,' ').replace(/[*_`]/g,'').trim();
+  const chunks=splitText(clean,120);
+  speakChunks(chunks,0);
 }
 
-function speakFallback(clean){
-  // Web Speech API fallback
+function splitText(t,max){
+  if(t.length<=max)return[t];
+  const sep=['. ','? ','! ',', ','; ',' '];
+  for(const s of sep){const i=t.lastIndexOf(s,max);if(i>10)return[t.slice(0,i+1),...splitText(t.slice(i+1).trim(),max)];}
+  return[t.slice(0,max),...splitText(t.slice(max).trim(),max)];
+}
+
+function speakChunks(chunks,i){
+  if(i>=chunks.length){onSpkEnd();return;}
+  if(!chunks[i].trim()){speakChunks(chunks,i+1);return;}
   if(!window.speechSynthesis){onSpkEnd();return;}
-  const voices=window.speechSynthesis.getVoices();
-  const utt=new SpeechSynthesisUtterance(clean);
-  const thVoice=voices.find(v=>/th/i.test(v.lang))||voices.find(v=>/en/i.test(v.lang)&&/female|samantha|zira|karen/i.test(v.name))||voices[0];
-  if(thVoice)utt.voice=thVoice;
-  utt.lang='th-TH';utt.rate=.88;utt.pitch=1.1;utt.volume=1;
-  utt.onstart=()=>{isSpeaking=true;setUI('sp');log('🔊 WS speaking...');};
-  utt.onend=()=>onSpkEnd();
-  utt.onerror=()=>onSpkEnd();
-  isSpeaking=true;setUI('sp');
-  window.speechSynthesis.speak(utt);
+
+  // Android Chrome watchdog: resume if paused
+  if(speechSynthesis.paused)speechSynthesis.resume();
+
+  const utt=new SpeechSynthesisUtterance(chunks[i]);
+  // Refresh voice (Android sometimes loses it)
+  const vs=speechSynthesis.getVoices();
+  const v=ttsVoice||(vs.find(v=>/th/i.test(v.lang))||vs[0]);
+  if(v)utt.voice=v;
+  utt.lang='th-TH'; utt.rate=0.88; utt.pitch=1.08; utt.volume=1;
+  utt.onstart=()=>{isSpeaking=true;setUI('sp');};
+  utt.onend=()=>setTimeout(()=>speakChunks(chunks,i+1),80);
+  utt.onerror=(e)=>{
+    log('TTS err:'+e.error);
+    setTimeout(()=>speakChunks(chunks,i+1),150);
+  };
+  try{
+    speechSynthesis.speak(utt);
+    // Watchdog: Android Chrome sometimes hangs
+    setTimeout(()=>{try{if(speechSynthesis.paused)speechSynthesis.resume();}catch(e){}},1000);
+  }catch(e){onSpkEnd();}
 }
+
+function speakFallback(clean){speakChunks(splitText(clean,120),0);}
 function onSpkEnd(){
   isSpeaking=false;setUI('sb2');
   if(voiceOn&&!isThinking)setTimeout(startListen,400);
 }
 function stopSpeak(){
-  try{if(window.responsiveVoice)responsiveVoice.cancel();}catch(e){}
-  try{if(window.speechSynthesis)window.speechSynthesis.cancel();}catch(e){}
+  try{if(window.speechSynthesis)speechSynthesis.cancel();}catch(e){}
   isSpeaking=false;
 }
 
