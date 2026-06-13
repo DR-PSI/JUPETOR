@@ -216,6 +216,7 @@ html,body{width:100%;height:100%;background:var(--dk);color:var(--c);font-family
     <div class="ps">
       <div class="pt">// VOICE ENGINE</div>
       <div class="ms">ENGINE <span>Web Speech</span></div>
+      <div class="ms">GENDER <span>MALE</span></div>
       <div class="ms">LANG <span>TH + EN</span></div>
       <div class="ms" style="flex-direction:column;gap:4px;">
         <span style="opacity:.5;font-size:9px;">SELECT VOICE</span>
@@ -433,18 +434,16 @@ function loadVoice(){
     });
   }
 
-  // Priority: female voices
+  // Priority: male voices
   ttsVoice =
-    vs.find(v=>/th/i.test(v.lang)&&/female|woman/i.test(v.name))
+    vs.find(v=>/th/i.test(v.lang)&&/male|man/i.test(v.name))
     || vs.find(v=>/th/i.test(v.lang)&&/google/i.test(v.name))
     || vs.find(v=>/th/i.test(v.lang))
-    || vs.find(v=>v.name==='Microsoft Zira - English (United States)')
-    || vs.find(v=>v.name==='Samantha')
-    || vs.find(v=>v.name==='Karen')
-    || vs.find(v=>v.name==='Moira')
-    || vs.find(v=>v.name==='Victoria')
-    || vs.find(v=>/en/i.test(v.lang)&&/zira|samantha|karen|victoria|moira|fiona|hazel/i.test(v.name))
-    || vs.find(v=>/en-GB/i.test(v.lang))
+    || vs.find(v=>v.name==='Microsoft David - English (United States)')
+    || vs.find(v=>v.name==='Microsoft Mark - English (United States)')
+    || vs.find(v=>v.name==='Daniel')
+    || vs.find(v=>v.name==='Alex')
+    || vs.find(v=>/en/i.test(v.lang)&&/david|mark|daniel|alex|male|man/i.test(v.name))
     || vs[0];
 
   // Set dropdown to selected voice
@@ -478,7 +477,12 @@ function unlockAudio(){
 function speak(text){
   if(!text||!window.speechSynthesis)return;
   stopSpeak();
-  const clean=text.replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'').replace(/<br>/g,' ').replace(/[*_`]/g,'').trim();
+  const clean=text
+    .replace(/\*\*/g,'').replace(/\*/g,'').replace(/#{1,6}\s/g,'')
+    .replace(/<br>/g,' ').replace(/[*_`]/g,'')
+    // Replace JUPETOR with phonetic spelling TTS can read
+    .replace(/JUPETOR/gi,'จูปีเตอร์')
+    .trim();
   const chunks=splitText(clean,120);
   speakChunks(chunks,0);
 }
@@ -643,11 +647,11 @@ async function send(){
       headers:{'Content-Type':'application/json','x-api-key':API_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
         model:'claude-sonnet-4-6',max_tokens:800,
-        system:`You are JUPETOR — a smart female AI voice assistant created by Dr. Pat (Founder & MD of Tinamics Co., Ltd.).
+        system:`You are JUPETOR — a smart male AI assistant created by Dr. Pat (Founder & MD of Tinamics Co., Ltd.).
 Expert in: power systems, electrical engineering, IoT/SCADA, PowerEye Sentinel, PowerEye Watch, HANUMAN Prime.
 Always call yourself "JUPETOR". Never say "Claude" or "HANUMAN AI".
 VOICE RULES: No markdown, no bullets, no symbols like ** or #. Keep replies short: 2-4 sentences max unless asked.
-Match user language (Thai/English/mixed). Sound warm and confident. In Thai, call user "คุณพัฒน์".`,
+Match user language (Thai/English/mixed). Sound confident and direct. In Thai, call user "คุณพัฒน์" and always end with "ครับ".`,
         messages:history
       })
     });
